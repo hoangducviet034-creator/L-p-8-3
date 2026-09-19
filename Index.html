@@ -1,0 +1,2329 @@
+<script>
+document.getElementById("year").textContent = new Date().getFullYear();
+
+function escapeHtml(v){
+  return String(v).replace(/[&<>"']/g,m=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#039;"
+  }[m]));
+}
+
+/* ===== SỰ KIỆN ===== */
+const defaultEvents=[
+ {id:1,month:"09",year:"2026",name:"Ngày hội bắt đầu năm học",desc:"Cả lớp gặp lại nhau, đặt mục tiêu mới và khởi động một năm học thật đáng nhớ."},
+ {id:2,month:"10",year:"2026",name:"Hoạt động tập thể",desc:"Thi đấu, trò chơi và những màn cổ vũ “ồn hơn cả loa trường”."},
+ {id:3,month:"11",year:"2026",name:"Văn nghệ & phong trào",desc:"Cùng nhau lên ý tưởng, tập luyện và tạo dấu ấn riêng của 8/3."}
+];
+
+let events;
+try{
+  events=JSON.parse(localStorage.getItem("lop83_events"))||defaultEvents
+}catch(e){
+  events=defaultEvents
+}
+
+const eventList=document.getElementById("eventList");
+const modal=document.getElementById("eventModal");
+let editingId=null;
+
+function saveEvents(){
+  localStorage.setItem("lop83_events",JSON.stringify(events))
+}
+
+function renderEvents(){
+  if(!events.length){
+    eventList.innerHTML='<div class="empty-state">Chưa có sự kiện nào. Hãy bấm “＋ Thêm sự kiện”.</div>';
+    return
+  }
+
+  eventList.innerHTML=events.map(e=>`
+    <div class="event">
+      <div class="date">
+        ${escapeHtml(e.month)}<br>${escapeHtml(e.year)}
+      </div>
+
+      <div class="event-content">
+        <strong>${escapeHtml(e.name)}</strong>
+        <span>${escapeHtml(e.desc)}</span>
+
+        <div class="event-actions">
+          <button onclick="editEvent(${e.id})">✏️ Sửa</button>
+          <button class="delete" onclick="deleteEvent(${e.id})">🗑️ Xóa</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function openEvent(id=null){
+  editingId=id;
+
+  const e=id?events.find(x=>x.id===id):null;
+
+  document.getElementById("modalTitle").textContent=
+    e?"Sửa sự kiện":"Thêm sự kiện";
+
+  document.getElementById("eventMonth").value=e?.month||"";
+  document.getElementById("eventYear").value=
+    e?.year||new Date().getFullYear();
+
+  document.getElementById("eventName").value=e?.name||"";
+  document.getElementById("eventDesc").value=e?.desc||"";
+
+  modal.classList.add("open");
+}
+
+function closeEvent(){
+  modal.classList.remove("open");
+  editingId=null;
+}
+
+document.getElementById("addEventBtn").onclick=()=>openEvent();
+
+document.getElementById("cancelEventBtn").onclick=closeEvent;
+
+modal.onclick=e=>{
+  if(e.target===modal)closeEvent()
+};
+
+document.getElementById("saveEventBtn").onclick=()=>{
+  const month=document.getElementById("eventMonth").value.trim();
+  const year=document.getElementById("eventYear").value.trim();
+  const name=document.getElementById("eventName").value.trim();
+  const desc=document.getElementById("eventDesc").value.trim();
+
+  if(!month||!year||!name){
+    alert("Hãy nhập tháng, năm và tên sự kiện nhé.");
+    return;
+  }
+
+  if(editingId){
+    const e=events.find(x=>x.id===editingId);
+
+    Object.assign(e,{
+      month,
+      year,
+      name,
+      desc
+    });
+  }else{
+    events.push({
+      id:Date.now(),
+      month,
+      year,
+      name,
+      desc
+    });
+  }
+
+  saveEvents();
+  renderEvents();
+  closeEvent();
+};
+
+window.editEvent=id=>openEvent(id);
+
+window.deleteEvent=id=>{
+  if(confirm("Xóa sự kiện này?")){
+    events=events.filter(e=>e.id!==id);
+    saveEvents();
+    renderEvents();
+  }
+};
+
+renderEvents();
+
+
+/* ===== ẢNH TỪ KHO ẢNH THIẾT BỊ ===== */
+
+const picker=document.getElementById("photoPicker");
+const gallery=document.getElementById("photoGallery");
+
+const titles=[
+  ["📸","Khoảnh khắc tập thể","Ảnh lớp / ảnh dã ngoại"],
+  ["🏆","Thành tích","Thi đấu & cuộc thi"],
+  ["🎤","Văn nghệ","Biểu diễn của lớp"],
+  ["⚽","Thể thao","Những trận đấu đáng nhớ"],
+  ["😂","Meme lớp","Góc vui vẻ 8/3"]
+];
+
+const DB="lop83_photos";
+const STORE="photos";
+
+function dbOpen(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(DB,1);
+
+    r.onupgradeneeded=()=>{
+      r.result.createObjectStore(
+        STORE,
+        {
+          keyPath:"id",
+          autoIncrement:true
+        }
+      )
+    };
+
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  })
+}
+
+async function getPhotos(){
+  const db=await dbOpen();
+
+  return new Promise((res,rej)=>{
+    const r=db
+      .transaction(STORE,"readonly")
+      .objectStore(STORE)
+      .getAll();
+
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  })
+}
+
+async function addPhotos(files){
+  const db=await dbOpen();
+
+  for(const f of files){
+
+    if(!f.type.startsWith("image/"))continue;
+
+    await new Promise((res,rej)=>{
+
+      const reader=new FileReader();
+
+      reader.onload=()=>{
+        const tx=db.transaction(STORE,"readwrite");
+
+        tx.objectStore(STORE).add({
+          name:f.name,
+          data:reader.result
+        });
+
+        tx.oncomplete=res;
+        tx.onerror=()=>rej(tx.error);
+      };
+
+      reader.onerror=()=>rej(reader.error);
+
+      reader.readAsDataURL(f);
+    });
+  }
+
+  renderPhotos();
+}
+
+async function deletePhoto(id){
+
+  const db=await dbOpen();
+
+  const tx=db.transaction(STORE,"readwrite");
+
+  tx.objectStore(STORE).delete(id);
+
+  tx.oncomplete=renderPhotos;
+}
+
+async function clearPhotos(){
+
+  if(!confirm("Xóa toàn bộ ảnh đã chọn?"))return;
+
+  const db=await dbOpen();
+
+  const tx=db.transaction(STORE,"readwrite");
+
+  tx.objectStore(STORE).clear();
+
+  tx.oncomplete=renderPhotos;
+}
+
+async function renderPhotos(){
+
+  const photos=await getPhotos();
+
+  if(!photos.length){
+
+    gallery.innerHTML=titles.map((t,i)=>`
+      <div class="photo ${i===0?"big":""}">
+        <div>
+          <div class="placeholder-icon">${t[0]}</div>
+          <strong>${t[1]}</strong>
+          <small>${t[2]}</small>
+        </div>
+      </div>
+    `).join("");
+
+    return;
+  }
+
+  gallery.innerHTML=photos.map((p,i)=>`
+    <div
+      class="photo has-image ${i===0?"big":""}"
+      style="background-image:url('${p.data}')"
+    >
+
+      <button
+        class="remove-photo"
+        onclick="deletePhoto(${p.id})"
+        title="Xóa ảnh"
+      >×</button>
+
+      <div>
+        <strong>${escapeHtml(p.name||"Ảnh lớp")}</strong>
+        <small>Ảnh từ thiết bị</small>
+      </div>
+
+    </div>
+  `).join("");
+}
+
+picker.onchange=async e=>{
+  if(e.target.files.length){
+    await addPhotos([...e.target.files]);
+  }
+
+  e.target.value="";
+};
+
+document.getElementById("clearPhotosBtn").onclick=clearPhotos;
+
+window.deletePhoto=deletePhoto;
+
+renderPhotos();
+
+
+/* ===== HIỆU ỨNG CUỘN ===== */
+
+setTimeout(()=>{
+
+  const cards=document.querySelectorAll(
+    ".stat,.member,.event-content,.photo,.card"
+  );
+
+  const observer=new IntersectionObserver(
+    entries=>entries.forEach(entry=>{
+
+      if(entry.isIntersecting){
+
+        entry.target.animate(
+          [
+            {
+              opacity:0,
+              transform:"translateY(18px)"
+            },
+            {
+              opacity:1,
+              transform:"translateY(0)"
+            }
+          ],
+          {
+            duration:550,
+            easing:"cubic-bezier(.2,.7,.2,1)",
+            fill:"forwards"
+          }
+        );
+
+        observer.unobserve(entry.target);
+      }
+
+    }),
+    {
+      threshold:.12
+    }
+  );
+
+  cards.forEach(c=>observer.observe(c));
+
+},150);
+
+
+/* ===== THÀNH VIÊN ===== */
+
+const MEMBER_KEY="lop83_members";
+
+const defaultMembers=[
+  {
+    name:"Nguyễn Văn A",
+    role:"Lớp trưởng"
+  },
+  {
+    name:"Trần Thị B",
+    role:"Lớp phó học tập"
+  },
+  {
+    name:"Lê Văn C",
+    role:"Lớp phó phong trào"
+  },
+  {
+    name:"Phạm Thị D",
+    role:"Tổ trưởng"
+  },
+  {
+    name:"Hoàng Văn E",
+    role:"Tổ trưởng"
+  },
+  {
+    name:"Thành viên 8/3",
+    role:"Luôn có mặt!"
+  }
+];
+
+let members=
+  JSON.parse(localStorage.getItem(MEMBER_KEY)||"null")
+  ||defaultMembers;
+
+let editingMember=-1;
+
+const memberList=document.getElementById("memberList");
+const memberModal=document.getElementById("memberModal");
+const memberName=document.getElementById("memberName");
+const memberRole=document.getElementById("memberRole");
+
+function initials(name){
+
+  const a=name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return a.length>1
+    ?(a[0][0]+a[a.length-1][0]).toUpperCase()
+    :((a[0]||"8").slice(0,2)).toUpperCase();
+}
+
+function saveMembers(){
+  localStorage.setItem(
+    MEMBER_KEY,
+    JSON.stringify(members)
+  );
+}
+
+function renderMembers(){
+
+  memberList.innerHTML=members.length
+
+    ?members.map((m,i)=>`
+
+      <div class="member">
+
+        <div class="avatar">
+          ${escapeHtml(initials(m.name))}
+        </div>
+
+        <div>
+          <h3>${escapeHtml(m.name)}</h3>
+          <p>${escapeHtml(m.role)}</p>
+        </div>
+
+        <div class="member-actions">
+
+          <button
+            class="edit"
+            onclick="editMember(${i})"
+          >
+            Sửa
+          </button>
+
+          <button
+            class="delete"
+            onclick="deleteMember(${i})"
+          >
+            Xóa
+          </button>
+
+        </div>
+
+      </div>
+
+    `).join("")
+
+    :`
+      <div class="empty-state">
+        Chưa có thành viên nào.
+        Bấm “Thêm thành viên” để bắt đầu.
+      </div>
+    `;
+}
+
+function openMember(i=-1){
+
+  editingMember=i;
+
+  document.getElementById("memberModalTitle").textContent=
+    i<0
+      ?"Thêm thành viên"
+      :"Sửa thành viên";
+
+  memberName.value=
+    i<0
+      ?""
+      :members[i].name;
+
+  memberRole.value=
+    i<0
+      ?""
+      :members[i].role;
+
+  memberModal.classList.add("open");
+
+  setTimeout(
+    ()=>memberName.focus(),
+    50
+  );
+}
+
+function closeMember(){
+  memberModal.classList.remove("open");
+}
+
+document.getElementById("addMemberBtn").onclick=
+  ()=>openMember();
+
+document.getElementById("cancelMemberBtn").onclick=
+  closeMember;
+
+document.getElementById("saveMemberBtn").onclick=()=>{
+
+  const name=
+    memberName.value.trim();
+
+  const role=
+    memberRole.value.trim()
+    ||"Thành viên";
+
+  if(!name){
+    memberName.focus();
+    return;
+  }
+
+  if(editingMember<0){
+
+    members.push({
+      name,
+      role
+    });
+
+  }else{
+
+    members[editingMember]={
+      name,
+      role
+    };
+
+  }
+
+  saveMembers();
+  renderMembers();
+  closeMember();
+};
+
+window.editMember=openMember;
+
+window.deleteMember=i=>{
+
+  if(confirm(`Xóa ${members[i].name}?`)){
+
+    members.splice(i,1);
+
+    saveMembers();
+    renderMembers();
+  }
+};
+
+memberModal.onclick=e=>{
+  if(e.target===memberModal){
+    closeMember();
+  }
+};
+
+renderMembers();
+
+
+/* ===== PONADIRA AI ===== */
+
+const aiFab=
+  document.getElementById("aiFab");
+
+const aiPanel=
+  document.getElementById("aiPanel");
+
+const aiClose=
+  document.getElementById("aiClose");
+
+const aiMessages=
+  document.getElementById("aiMessages");
+
+const aiForm=
+  document.getElementById("aiForm");
+
+const aiInput=
+  document.getElementById("aiInput");
+
+
+function aiAdd(text,type="bot"){
+
+  const d=document.createElement("div");
+
+  d.className="ai-msg "+type;
+
+  d.textContent=text;
+
+  aiMessages.appendChild(d);
+
+  aiMessages.scrollTop=
+    aiMessages.scrollHeight;
+}
+
+
+function getEvents(){
+
+  try{
+
+    return JSON.parse(
+      localStorage.getItem("lop83_events")||"[]"
+    );
+
+  }catch{
+
+    return[];
+
+  }
+}
+
+
+function ponadira(q){
+
+  const x=q.toLowerCase().trim();
+
+
+  if(/^(xin chào|chào|hello|hi)\b/.test(x))
+
+    return "Xin chào! Mình là Ponadira 🤖. Mình có thể giúp bạn xem thông tin thành viên, sự kiện và giới thiệu về lớp 8/3.";
+
+
+  if(
+    x.includes("ai là bạn")
+    ||x.includes("bạn là ai")
+  )
+
+    return "Mình là Ponadira AI — trợ lý ảo của website lớp 8/3. 😎";
+
+
+  if(
+    x.includes("thành viên")
+    ||x.includes("lớp mình có ai")
+    ||x.includes("ai trong lớp")
+  ){
+
+    return members.length
+
+      ?"Danh sách hiện tại của lớp 8/3:\n"+
+        members.map(
+          (m,i)=>
+            `${i+1}. ${m.name} — ${m.role}`
+        ).join("\n")
+
+      :"Hiện chưa có thành viên nào được thêm.";
+  }
+
+
+  if(
+    x.includes("lớp trưởng")
+    ||x.includes("lớp phó")
+    ||x.includes("tổ trưởng")
+  ){
+
+    const a=members.filter(
+      m=>
+        x.includes(m.role.toLowerCase())
+        ||
+        m.role.toLowerCase().includes(
+          x.includes("lớp trưởng")
+            ?"lớp trưởng"
+            :x.includes("lớp phó")
+              ?"lớp phó"
+              :"tổ trưởng"
+        )
+    );
+
+    return a.length
+
+      ?a.map(
+        m=>`${m.name} — ${m.role}`
+      ).join("\n")
+
+      :"Mình chưa thấy thông tin chức vụ này.";
+  }
+
+
+  if(
+    x.includes("sự kiện")
+    ||x.includes("hoạt động")
+    ||x.includes("lịch lớp")
+  ){
+
+    const ev=getEvents();
+
+    return ev.length
+
+      ?"Các sự kiện đang lưu:\n"+
+        ev.map(
+          (e,i)=>
+            `${i+1}. ${e.title||e.name||"Sự kiện"}${
+              e.date
+                ?" — "+e.date
+                :""
+            }${
+              e.desc
+                ?"\n   "+e.desc
+                :""
+            }`
+        ).join("\n")
+
+      :"Chưa có sự kiện nào được lưu. Bạn có thể thêm ở mục Hoạt động & kỷ niệm.";
+  }
+
+
+  if(
+    x.includes("giới thiệu")
+    ||x.includes("lớp 8/3")
+    ||x.includes("về lớp")
+  )
+
+    return "Lớp 8/3 là một tập thể cùng học tập, hoạt động và lưu giữ kỷ niệm. Châm ngôn trên trang là: cùng cố gắng và không bỏ ai lại phía sau. ✨";
+
+
+  if(
+    x.includes("ảnh")
+    ||x.includes("thư viện")
+  )
+
+    return "Bạn có thể bấm “Chọn ảnh từ thiết bị” trong mục Thư viện để thêm ảnh. Ảnh được lưu cục bộ trên thiết bị đang mở website.";
+
+
+  if(
+    x.includes("cảm ơn")
+    ||x.includes("thanks")
+  )
+
+    return "Không có gì! Ponadira luôn sẵn sàng. 🤖";
+
+
+  return "Mình chưa hiểu câu này lắm 😅. Bạn thử hỏi về thành viên, chức vụ, sự kiện, thư viện ảnh hoặc giới thiệu lớp nhé!";
+}
+
+
+aiFab.onclick=()=>{
+
+  aiPanel.classList.toggle("open");
+
+  if(
+    aiPanel.classList.contains("open")
+    &&
+    !aiMessages.children.length
+  ){
+
+    aiAdd(
+      "Xin chào! Mình là Ponadira 🤖\nBạn muốn biết gì về lớp 8/3?"
+    );
+  }
+
+  if(aiPanel.classList.contains("open"))
+
+    setTimeout(
+      ()=>aiInput.focus(),
+      80
+    );
+};
+
+
+aiClose.onclick=()=>{
+  aiPanel.classList.remove("open");
+};
+
+
+aiForm.onsubmit=e=>{
+
+  e.preventDefault();
+
+  const q=aiInput.value.trim();
+
+  if(!q)return;
+
+  aiAdd(q,"user");
+
+  aiInput.value="";
+
+  const t=document.createElement("div");
+
+  t.className="ai-msg bot ai-typing";
+
+  t.textContent="Ponadira đang suy nghĩ...";
+
+  aiMessages.appendChild(t);
+
+  aiMessages.scrollTop=
+    aiMessages.scrollHeight;
+
+  setTimeout(()=>{
+
+    t.remove();
+
+    aiAdd(
+      ponadira(q)
+    );
+
+  },350);
+};
+
+
+document
+  .querySelectorAll(".ai-suggest")
+  .forEach(b=>{
+
+    b.onclick=()=>{
+
+      aiInput.value=
+        b.textContent;
+
+      aiForm.requestSubmit();
+
+    };
+
+  });
+
+</script>
+
+
+<!-- MODAL THÀNH VIÊN -->
+
+<div
+  class="modal"
+  id="memberModal"
+>
+
+  <div class="modal-box">
+
+    <h3 id="memberModalTitle">
+      Thêm thành viên
+    </h3>
+
+    <div class="form-grid">
+
+      <label for="memberName">
+        Họ tên
+      </label>
+
+      <input
+        id="memberName"
+        placeholder="Ví dụ: Nguyễn Văn A"
+      >
+
+      <label for="memberRole">
+        Chức vụ
+      </label>
+
+      <input
+        id="memberRole"
+        placeholder="Ví dụ: Lớp trưởng / Tổ trưởng / Thành viên"
+      >
+
+    </div>
+
+    <div class="modal-actions">
+
+      <button
+        class="btn btn-secondary"
+        id="cancelMemberBtn"
+      >
+        Hủy
+      </button>
+
+      <button
+        class="btn btn-primary"
+        id="saveMemberBtn"
+      >
+        Lưu
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- PONADIRA AI -->
+
+<button
+  class="ai-fab"
+  id="aiFab"
+  aria-label="Mở Ponadira AI"
+>
+  🤖
+</button>
+
+
+<div
+  class="ai-panel"
+  id="aiPanel"
+>
+
+  <div class="ai-head">
+
+    <div class="ai-logo">
+      🤖
+    </div>
+
+    <div>
+      <strong>Ponadira AI</strong>
+      <small>Trợ lý lớp 8/3</small>
+    </div>
+
+    <button
+      class="ai-close"
+      id="aiClose"
+      aria-label="Đóng"
+    >
+      ×
+    </button>
+
+  </div>
+
+
+  <div
+    class="ai-messages"
+    id="aiMessages"
+  ></div>
+
+
+  <div class="ai-suggests">
+
+    <button class="ai-suggest">
+      Lớp mình có ai?
+    </button>
+
+    <button class="ai-suggest">
+      Có sự kiện gì?
+    </button>
+
+    <button class="ai-suggest">
+      Giới thiệu lớp
+    </button>
+
+  </div>
+
+
+  <form
+    class="ai-form"
+    id="aiForm"
+  >
+
+    <input
+      class="ai-input"
+      id="aiInput"
+      autocomplete="off"
+      placeholder="Hỏi Ponadira..."
+    >
+
+    <button class="ai-send">
+      Gửi
+    </button>
+
+  </form>
+
+
+  <div class="ai-note">
+    Ponadira đang dùng dữ liệu lớp được lưu trên thiết bị này.
+  </div>
+
+</div>
+
+<!-- =========================
+     MODAL THÀNH VIÊN
+========================= -->
+<div class="modal" id="memberModal">
+  <div class="modal-box">
+    <h3 id="memberModalTitle">Thêm thành viên</h3>
+
+    <div class="form-grid">
+      <label for="memberName">Họ tên</label>
+      <input id="memberName" placeholder="Ví dụ: Nguyễn Văn A">
+
+      <label for="memberRole">Chức vụ</label>
+      <input id="memberRole" placeholder="Ví dụ: Lớp trưởng / Tổ trưởng / Thành viên">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelMemberBtn">Hủy</button>
+      <button class="btn btn-primary" id="saveMemberBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- =========================
+     PONADIRA AI
+========================= -->
+<button
+  class="ai-fab"
+  id="aiFab"
+  aria-label="Mở Ponadira AI">
+  🤖
+</button>
+
+<div class="ai-panel" id="aiPanel">
+
+  <div class="ai-head">
+    <div class="ai-logo">🤖</div>
+
+    <div>
+      <strong>Ponadira AI</strong>
+      <small>Trợ lý lớp 8/3</small>
+    </div>
+
+    <button
+      class="ai-close"
+      id="aiClose"
+      aria-label="Đóng">
+      ×
+    </button>
+  </div>
+
+  <div
+    class="ai-messages"
+    id="aiMessages">
+  </div>
+
+  <div class="ai-suggests">
+    <button class="ai-suggest">
+      Lớp mình có ai?
+    </button>
+
+    <button class="ai-suggest">
+      Có sự kiện gì?
+    </button>
+
+    <button class="ai-suggest">
+      Giới thiệu lớp
+    </button>
+  </div>
+
+  <form
+    class="ai-form"
+    id="aiForm">
+
+    <input
+      class="ai-input"
+      id="aiInput"
+      autocomplete="off"
+      placeholder="Hỏi Ponadira...">
+
+    <button
+      class="ai-send"
+      type="submit">
+      Gửi
+    </button>
+
+  </form>
+
+  <div class="ai-note">
+    Ponadira đang dùng dữ liệu lớp được lưu trên thiết bị này.
+  </div>
+
+</div>
+
+
+<!-- =========================
+     JAVASCRIPT
+     ĐỂ CUỐI CÙNG
+========================= -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  /* =========================
+     NĂM Ở FOOTER
+  ========================= */
+  const yearElement = document.getElementById("year");
+
+  if (yearElement) {
+    yearElement.textContent = new Date().getFullYear();
+  }
+
+
+  /* =========================
+     HÀM BẢO VỆ HTML
+  ========================= */
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function (m) {
+      return {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[m];
+    });
+  }
+
+
+  /* =====================================================
+     PHẦN 1 — SỰ KIỆN
+  ===================================================== */
+
+  const defaultEvents = [
+    {
+      id: 1,
+      month: "09",
+      year: "2026",
+      name: "Ngày hội bắt đầu năm học",
+      desc: "Cả lớp gặp lại nhau, đặt mục tiêu mới và khởi động một năm học thật đáng nhớ."
+    },
+    {
+      id: 2,
+      month: "10",
+      year: "2026",
+      name: "Hoạt động tập thể",
+      desc: "Thi đấu, trò chơi và những màn cổ vũ của lớp."
+    },
+    {
+      id: 3,
+      month: "11",
+      year: "2026",
+      name: "Văn nghệ & phong trào",
+      desc: "Cùng nhau lên ý tưởng, tập luyện và tạo dấu ấn riêng của 8/3."
+    }
+  ];
+
+  let events = [];
+
+  try {
+    const savedEvents =
+      JSON.parse(localStorage.getItem("lop83_events"));
+
+    events =
+      Array.isArray(savedEvents)
+        ? savedEvents
+        : defaultEvents;
+
+  } catch (error) {
+    events = defaultEvents;
+  }
+
+
+  const eventList =
+    document.getElementById("eventList");
+
+  const eventModal =
+    document.getElementById("eventModal");
+
+  const addEventBtn =
+    document.getElementById("addEventBtn");
+
+  const cancelEventBtn =
+    document.getElementById("cancelEventBtn");
+
+  const saveEventBtn =
+    document.getElementById("saveEventBtn");
+
+  let editingEventId = null;
+
+
+  function saveEvents() {
+    localStorage.setItem(
+      "lop83_events",
+      JSON.stringify(events)
+    );
+  }
+
+
+  function renderEvents() {
+
+    if (!eventList) return;
+
+    if (!events.length) {
+
+      eventList.innerHTML = `
+        <div class="empty-state">
+          Chưa có sự kiện nào.
+          Hãy bấm “＋ Thêm sự kiện”.
+        </div>
+      `;
+
+      return;
+    }
+
+
+    eventList.innerHTML = events.map(event => {
+
+      return `
+        <div class="event">
+
+          <div class="date">
+            ${escapeHtml(event.month)}
+            <br>
+            ${escapeHtml(event.year)}
+          </div>
+
+          <div class="event-content">
+
+            <strong>
+              ${escapeHtml(event.name)}
+            </strong>
+
+            <span>
+              ${escapeHtml(event.desc || "")}
+            </span>
+
+            <div class="event-actions">
+
+              <button
+                onclick="editEvent(${event.id})">
+                ✏️ Sửa
+              </button>
+
+              <button
+                class="delete"
+                onclick="deleteEvent(${event.id})">
+                🗑️ Xóa
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      `;
+
+    }).join("");
+  }
+
+
+  function openEvent(id = null) {
+
+    editingEventId = id;
+
+    const event =
+      id !== null
+        ? events.find(e => e.id === id)
+        : null;
+
+
+    document.getElementById("modalTitle").textContent =
+      event
+        ? "Sửa sự kiện"
+        : "Thêm sự kiện";
+
+
+    document.getElementById("eventMonth").value =
+      event?.month || "";
+
+
+    document.getElementById("eventYear").value =
+      event?.year || new Date().getFullYear();
+
+
+    document.getElementById("eventName").value =
+      event?.name || "";
+
+
+    document.getElementById("eventDesc").value =
+      event?.desc || "";
+
+
+    eventModal.classList.add("open");
+    eventModal.setAttribute("aria-hidden", "false");
+  }
+
+
+  function closeEvent() {
+
+    eventModal.classList.remove("open");
+
+    eventModal.setAttribute("aria-hidden", "true");
+
+    editingEventId = null;
+  }
+
+
+  if (addEventBtn) {
+    addEventBtn.onclick = () => openEvent();
+  }
+
+
+  if (cancelEventBtn) {
+    cancelEventBtn.onclick = closeEvent;
+  }
+
+
+  if (eventModal) {
+
+    eventModal.onclick = function (e) {
+
+      if (e.target === eventModal) {
+        closeEvent();
+      }
+
+    };
+
+  }
+
+
+  if (saveEventBtn) {
+
+    saveEventBtn.onclick = function () {
+
+      const month =
+        document.getElementById("eventMonth")
+          .value.trim();
+
+      const year =
+        document.getElementById("eventYear")
+          .value.trim();
+
+      const name =
+        document.getElementById("eventName")
+          .value.trim();
+
+      const desc =
+        document.getElementById("eventDesc")
+          .value.trim();
+
+
+      if (!month || !year || !name) {
+
+        alert(
+          "Hãy nhập tháng, năm và tên sự kiện nhé."
+        );
+
+        return;
+      }
+
+
+      if (editingEventId !== null) {
+
+        const event =
+          events.find(
+            e => e.id === editingEventId
+          );
+
+        if (event) {
+
+          event.month = month;
+          event.year = year;
+          event.name = name;
+          event.desc = desc;
+
+        }
+
+      } else {
+
+        events.push({
+          id: Date.now(),
+          month: month,
+          year: year,
+          name: name,
+          desc: desc
+        });
+
+      }
+
+
+      saveEvents();
+      renderEvents();
+      closeEvent();
+    };
+
+  }
+
+
+  window.editEvent = function (id) {
+    openEvent(id);
+  };
+
+
+  window.deleteEvent = function (id) {
+
+    if (!confirm("Xóa sự kiện này?")) {
+      return;
+    }
+
+    events =
+      events.filter(
+        event => event.id !== id
+      );
+
+    saveEvents();
+    renderEvents();
+  };
+
+
+  renderEvents();
+
+
+  /* =====================================================
+     PHẦN 2 — THƯ VIỆN ẢNH
+  ===================================================== */
+
+  const photoPicker =
+    document.getElementById("photoPicker");
+
+  const photoGallery =
+    document.getElementById("photoGallery");
+
+  const clearPhotosBtn =
+    document.getElementById("clearPhotosBtn");
+
+
+  const photoTitles = [
+    ["📸", "Khoảnh khắc tập thể", "Ảnh lớp / ảnh dã ngoại"],
+    ["🏆", "Thành tích", "Thi đấu & cuộc thi"],
+    ["🎤", "Văn nghệ", "Biểu diễn của lớp"],
+    ["⚽", "Thể thao", "Những trận đấu đáng nhớ"],
+    ["😂", "Meme lớp", "Góc vui vẻ 8/3"]
+  ];
+
+
+  const PHOTO_DB = "lop83_photos";
+  const PHOTO_STORE = "photos";
+
+
+  function openPhotoDB() {
+
+    return new Promise((resolve, reject) => {
+
+      const request =
+        indexedDB.open(PHOTO_DB, 1);
+
+
+      request.onupgradeneeded = function () {
+
+        request.result.createObjectStore(
+          PHOTO_STORE,
+          {
+            keyPath: "id",
+            autoIncrement: true
+          }
+        );
+
+      };
+
+
+      request.onsuccess = function () {
+        resolve(request.result);
+      };
+
+
+      request.onerror = function () {
+        reject(request.error);
+      };
+
+    });
+
+  }
+
+
+  async function getPhotos() {
+
+    const db =
+      await openPhotoDB();
+
+
+    return new Promise((resolve, reject) => {
+
+      const request =
+        db
+          .transaction(PHOTO_STORE, "readonly")
+          .objectStore(PHOTO_STORE)
+          .getAll();
+
+
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+
+
+      request.onerror = () => {
+        reject(request.error);
+      };
+
+    });
+
+  }
+
+
+  async function addPhotos(files) {
+
+    const db =
+      await openPhotoDB();
+
+
+    for (const file of files) {
+
+      if (!file.type.startsWith("image/")) {
+        continue;
+      }
+
+
+      await new Promise((resolve, reject) => {
+
+        const reader =
+          new FileReader();
+
+
+        reader.onload = function () {
+
+          const transaction =
+            db.transaction(
+              PHOTO_STORE,
+              "readwrite"
+            );
+
+
+          transaction
+            .objectStore(PHOTO_STORE)
+            .add({
+              name: file.name,
+              data: reader.result
+            });
+
+
+          transaction.oncomplete =
+            resolve;
+
+          transaction.onerror =
+            () => reject(transaction.error);
+
+        };
+
+
+        reader.onerror =
+          () => reject(reader.error);
+
+
+        reader.readAsDataURL(file);
+
+      });
+
+    }
+
+
+    renderPhotos();
+  }
+
+
+  async function deletePhoto(id) {
+
+    const db =
+      await openPhotoDB();
+
+
+    const transaction =
+      db.transaction(
+        PHOTO_STORE,
+        "readwrite"
+      );
+
+
+    transaction
+      .objectStore(PHOTO_STORE)
+      .delete(id);
+
+
+    transaction.oncomplete =
+      renderPhotos;
+  }
+
+
+  async function clearPhotos() {
+
+    if (!confirm("Xóa toàn bộ ảnh đã chọn?")) {
+      return;
+    }
+
+
+    const db =
+      await openPhotoDB();
+
+
+    const transaction =
+      db.transaction(
+        PHOTO_STORE,
+        "readwrite"
+      );
+
+
+    transaction
+      .objectStore(PHOTO_STORE)
+      .clear();
+
+
+    transaction.oncomplete =
+      renderPhotos;
+  }
+
+
+  async function renderPhotos() {
+
+    if (!photoGallery) {
+      return;
+    }
+
+
+    const photos =
+      await getPhotos();
+
+
+    if (!photos.length) {
+
+      photoGallery.innerHTML =
+        photoTitles.map((title, index) => {
+
+          return `
+            <div class="photo ${index === 0 ? "big" : ""}">
+
+              <div>
+
+                <div class="placeholder-icon">
+                  ${title[0]}
+                </div>
+
+                <strong>
+                  ${title[1]}
+                </strong>
+
+                <small>
+                  ${title[2]}
+                </small>
+
+              </div>
+
+            </div>
+          `;
+
+        }).join("");
+
+      return;
+    }
+
+
+    photoGallery.innerHTML =
+      photos.map((photo, index) => {
+
+        return `
+          <div
+            class="photo has-image ${index === 0 ? "big" : ""}"
+            style="background-image:url('${photo.data}')">
+
+            <button
+              class="remove-photo"
+              onclick="deletePhoto(${photo.id})"
+              title="Xóa ảnh">
+              ×
+            </button>
+
+            <div>
+
+              <strong>
+                ${escapeHtml(
+                  photo.name || "Ảnh lớp"
+                )}
+              </strong>
+
+              <small>
+                Ảnh từ thiết bị
+              </small>
+
+            </div>
+
+          </div>
+        `;
+
+      }).join("");
+
+  }
+
+
+  if (photoPicker) {
+
+    photoPicker.onchange =
+      async function (event) {
+
+        if (event.target.files.length) {
+
+          await addPhotos(
+            [...event.target.files]
+          );
+
+        }
+
+        event.target.value = "";
+
+      };
+
+  }
+
+
+  if (clearPhotosBtn) {
+    clearPhotosBtn.onclick = clearPhotos;
+  }
+
+
+  window.deletePhoto =
+    deletePhoto;
+
+
+  renderPhotos();
+
+
+  /* =====================================================
+     PHẦN 3 — HIỆU ỨNG KHI CUỘN
+  ===================================================== */
+
+  setTimeout(() => {
+
+    const cards =
+      document.querySelectorAll(
+        ".stat,.member,.event-content,.photo,.card"
+      );
+
+
+    const observer =
+      new IntersectionObserver(
+        entries => {
+
+          entries.forEach(entry => {
+
+            if (entry.isIntersecting) {
+
+              entry.target.animate(
+                [
+                  {
+                    opacity: 0,
+                    transform: "translateY(18px)"
+                  },
+                  {
+                    opacity: 1,
+                    transform: "translateY(0)"
+                  }
+                ],
+                {
+                  duration: 550,
+                  easing: "cubic-bezier(.2,.7,.2,1)",
+                  fill: "forwards"
+                }
+              );
+
+
+              observer.unobserve(
+                entry.target
+              );
+
+            }
+
+          });
+
+        },
+        {
+          threshold: 0.12
+        }
+      );
+
+
+    cards.forEach(card => {
+      observer.observe(card);
+    });
+
+  }, 150);
+
+
+  /* =====================================================
+     PHẦN 4 — THÀNH VIÊN
+  ===================================================== */
+
+  const MEMBER_KEY =
+    "lop83_members";
+
+
+  const defaultMembers = [
+    {
+      name: "Nguyễn Văn A",
+      role: "Lớp trưởng"
+    },
+    {
+      name: "Trần Thị B",
+      role: "Lớp phó học tập"
+    },
+    {
+      name: "Lê Văn C",
+      role: "Lớp phó phong trào"
+    },
+    {
+      name: "Phạm Thị D",
+      role: "Tổ trưởng"
+    },
+    {
+      name: "Hoàng Văn E",
+      role: "Tổ trưởng"
+    },
+    {
+      name: "Thành viên 8/3",
+      role: "Luôn có mặt!"
+    }
+  ];
+
+
+  let members;
+
+
+  try {
+
+    const savedMembers =
+      JSON.parse(
+        localStorage.getItem(MEMBER_KEY)
+      );
+
+
+    members =
+      Array.isArray(savedMembers)
+        ? savedMembers
+        : defaultMembers;
+
+  } catch (error) {
+
+    members = defaultMembers;
+
+  }
+
+
+  let editingMember = -1;
+
+
+  const memberList =
+    document.getElementById("memberList");
+
+  const memberModal =
+    document.getElementById("memberModal");
+
+  const memberName =
+    document.getElementById("memberName");
+
+  const memberRole =
+    document.getElementById("memberRole");
+
+
+  function initials(name) {
+
+    const words =
+      name
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+
+    if (!words.length) {
+      return "8";
+    }
+
+
+    if (words.length > 1) {
+
+      return (
+        words[0][0] +
+        words[words.length - 1][0]
+      ).toUpperCase();
+
+    }
+
+
+    return words[0]
+      .slice(0, 2)
+      .toUpperCase();
+  }
+
+
+  function saveMembers() {
+
+    localStorage.setItem(
+      MEMBER_KEY,
+      JSON.stringify(members)
+    );
+
+  }
+
+
+  function renderMembers() {
+
+    if (!memberList) {
+      return;
+    }
+
+
+    if (!members.length) {
+
+      memberList.innerHTML = `
+        <div class="empty-state">
+          Chưa có thành viên nào.
+          Bấm “Thêm thành viên” để bắt đầu.
+        </div>
+      `;
+
+      return;
+    }
+
+
+    memberList.innerHTML =
+      members.map((member, index) => {
+
+        return `
+          <div class="member">
+
+            <div class="avatar">
+              ${escapeHtml(
+                initials(member.name)
+              )}
+            </div>
+
+            <div>
+
+              <h3>
+                ${escapeHtml(member.name)}
+              </h3>
+
+              <p>
+                ${escapeHtml(member.role)}
+              </p>
+
+            </div>
+
+            <div class="member-actions">
+
+              <button
+                class="edit"
+                onclick="editMember(${index})">
+                Sửa
+              </button>
+
+              <button
+                class="delete"
+                onclick="deleteMember(${index})">
+                Xóa
+              </button>
+
+            </div>
+
+          </div>
+        `;
+
+      }).join("");
+
+  }
+
+
+  function openMember(index = -1) {
+
+    editingMember = index;
+
+
+    document.getElementById(
+      "memberModalTitle"
+    ).textContent =
+      index < 0
+        ? "Thêm thành viên"
+        : "Sửa thành viên";
+
+
+    memberName.value =
+      index < 0
+        ? ""
+        : members[index].name;
+
+
+    memberRole.value =
+      index < 0
+        ? ""
+        : members[index].role;
+
+
+    memberModal.classList.add("open");
+
+
+    setTimeout(() => {
+
+      memberName.focus();
+
+    }, 50);
+
+  }
+
+
+  function closeMember() {
+
+    memberModal.classList.remove(
+      "open"
+    );
+
+  }
+
+
+  const addMemberBtn =
+    document.getElementById(
+      "addMemberBtn"
+    );
+
+
+  const cancelMemberBtn =
+    document.getElementById(
+      "cancelMemberBtn"
+    );
+
+
+  const saveMemberBtn =
+    document.getElementById(
+      "saveMemberBtn"
+    );
+
+
+  if (addMemberBtn) {
+
+    addMemberBtn.onclick =
+      () => openMember();
+
+  }
+
+
+  if (cancelMemberBtn) {
+
+    cancelMemberBtn.onclick =
+      closeMember;
+
+  }
+
+
+  if (saveMemberBtn) {
+
+    saveMemberBtn.onclick =
+      function () {
+
+        const name =
+          memberName.value.trim();
+
+
+        const role =
+          memberRole.value.trim() ||
+          "Thành viên";
+
+
+        if (!name) {
+
+          memberName.focus();
+
+          return;
+        }
+
+
+        if (editingMember < 0) {
+
+          members.push({
+            name: name,
+            role: role
+          });
+
+        } else {
+
+          members[editingMember] = {
+            name: name,
+            role: role
+          };
+
+        }
+
+
+        saveMembers();
+        renderMembers();
+        closeMember();
+
+      };
+
+  }
+
+
+  if (memberModal) {
+
+    memberModal.onclick =
+      function (event) {
+
+        if (
+          event.target === memberModal
+        ) {
+          closeMember();
+        }
+
+      };
+
+  }
+
+
+  window.editMember =
+    openMember;
+
+
+  window.deleteMember =
+    function (index) {
+
+      if (
+        !confirm(
+          `Xóa ${members[index].name}?`
+        )
+      ) {
+        return;
+      }
+
+
+      members.splice(index, 1);
+
+      saveMembers();
+      renderMembers();
+
+    };
+
+
+  renderMembers();
+
+
+  /* =====================================================
+     PHẦN 5 — PONADIRA AI
+  ===================================================== */
+
+  const aiFab =
+    document.getElementById("aiFab");
+
+  const aiPanel =
+    document.getElementById("aiPanel");
+
+  const aiClose =
+    document.getElementById("aiClose");
+
+  const aiMessages =
+    document.getElementById("aiMessages");
+
+  const aiForm =
+    document.getElementById("aiForm");
+
+  const aiInput =
+    document.getElementById("aiInput");
+
+
+  function aiAdd(
+    text,
+    type = "bot"
+  ) {
+
+    const message =
+      document.createElement("div");
+
+
+    message.className =
+      "ai-msg " + type;
+
+
+    message.textContent =
+      text;
+
+
+    aiMessages.appendChild(
+      message
+    );
+
+
+    aiMessages.scrollTop =
+      aiMessages.scrollHeight;
+
+  }
+
+
+  function getEventsForAI() {
+
+    try {
+
+      return JSON.parse(
+        localStorage.getItem(
+          "lop83_events"
+        ) || "[]"
+      );
+
+    } catch (error) {
+
+      return [];
+
+    }
+
+  }
+
+
+  function ponadira(question) {
+
+    const x =
+      question
+        .toLowerCase()
+        .trim();
+
+
+    /* Chào hỏi */
+function ponadira(question) {
+  const x = question.toLowerCase().trim();
+
+  /* Chào hỏi */
+  if (/^(xin chào|chào|hello|hi)\b/.test(x)) {
+    return "Xin chào! Mình là Ponadira 🤖. Mình có thể giúp bạn xem thông tin thành viên, sự kiện và giới thiệu về lớp 8/3.";
+  }
+
+  /* Ponadira là ai? */
+  if (x.includes("ai là bạn") || x.includes("bạn là ai")) {
+    return "Mình là Ponadira AI — trợ lý ảo của website lớp 8/3. 😎";
+  }
+
+  /* Thành viên */
+  if (
+    x.includes("thành viên") ||
+    x.includes("lớp mình có ai") ||
+    x.includes("ai trong lớp")
+  ) {
+    return members.length
+      ? "Danh sách hiện tại của lớp 8/3:\n" +
+          members
+            .map((m, i) => `${i + 1}. ${m.name} — ${m.role}`)
+            .join("\n")
+      : "Hiện chưa có thành viên nào được thêm.";
+  }
+
+  /* Chức vụ */
+  if (
+    x.includes("lớp trưởng") ||
+    x.includes("lớp phó") ||
+    x.includes("tổ trưởng")
+  ) {
+    let keyword = "";
+
+    if (x.includes("lớp trưởng")) {
+      keyword = "lớp trưởng";
+    } else if (x.includes("lớp phó")) {
+      keyword = "lớp phó";
+    } else {
+      keyword = "tổ trưởng";
+    }
+
+    const result = members.filter(m =>
+      m.role.toLowerCase().includes(keyword)
+    );
+
+    return result.length
+      ? result.map(m => `${m.name} — ${m.role}`).join("\n")
+      : "Mình chưa thấy thông tin chức vụ này.";
+  }
+
+  /* Sự kiện */
+  if (
+    x.includes("sự kiện") ||
+    x.includes("hoạt động") ||
+    x.includes("lịch lớp")
+  ) {
+    const ev = getEvents();
+
+    return ev.length
+      ? "Các sự kiện đang lưu:\n" +
+          ev
+            .map(
+              (e, i) =>
+                `${i + 1}. ${e.name || e.title || "Sự kiện"}${
+                  e.month && e.year ? ` — ${e.month}/${e.year}` : ""
+                }${e.date ? ` — ${e.date}` : ""}${
+                  e.desc ? `\n   ${e.desc}` : ""
+                }`
+            )
+            .join("\n")
+      : "Chưa có sự kiện nào được lưu. Bạn có thể thêm ở mục Hoạt động & kỷ niệm.";
+  }
+
+  /* Giới thiệu lớp */
+  if (
+    x.includes("giới thiệu") ||
+    x.includes("lớp 8/3") ||
+    x.includes("về lớp")
+  ) {
+    return "Lớp 8/3 là một tập thể cùng học tập, hoạt động và lưu giữ kỷ niệm. Châm ngôn trên trang là: cùng cố gắng và không bỏ ai lại phía sau. ✨";
+  }
+
+  /* Thư viện ảnh */
+  if (x.includes("ảnh") || x.includes("thư viện")) {
+    return "Bạn có thể bấm “Chọn ảnh từ thiết bị” trong mục Thư viện để thêm ảnh. Ảnh được lưu cục bộ trên thiết bị đang mở website.";
+  }
+
+  /* Cảm ơn */
+  if (x.includes("cảm ơn") || x.includes("thanks")) {
+    return "Không có gì! Ponadira luôn sẵn sàng. 🤖";
+  }
+
+  /* Không hiểu câu hỏi */
+  return "Mình chưa hiểu câu này lắm 😅. Bạn thử hỏi về thành viên, chức vụ, sự kiện, thư viện ảnh hoặc giới thiệu lớp nhé!";
+}
+
+aiFab.onclick = () => {
+  aiPanel.classList.toggle("open");
+
+  if (aiMessages.children.length === 0) {
+    addAIMessage(
+      "Xin chào! Mình là Ponadira 🤖. Bạn muốn hỏi gì về lớp 8/3?"
+    );
+  }
+};
+
+aiClose.onclick = () => {
+  aiPanel.classList.remove("open");
+};
+
+function addAIMessage(text, type = "bot") {
+  const div = document.createElement("div");
+  div.className = "ai-msg " + type;
+  div.textContent = text;
+  aiMessages.appendChild(div);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+aiForm.addEventListener("submit", e => {
+  e.preventDefault();
+
+  const question = aiInput.value.trim();
+  if (!question) return;
+
+  addAIMessage(question, "user");
+
+  const answer = ponadira(question);
+
+  setTimeout(() => {
+    addAIMessage(answer, "bot");
+  }, 300);
+
+  aiInput.value = "";
+});    
+
+setTimeout(() => {
+  addAIMessage(answer, "bot");
+}, 300);
+
+aiInput.value = "";
+});    
+
+  aiSuggests.forEach(btn => {
+  btn.addEventListener("click", () => {
+    aiInput.value = btn.textContent;
+    aiForm.dispatchEvent(new Event("submit"));
+  });
+});  
+</script>
+</body>
+</html>
+
+  
