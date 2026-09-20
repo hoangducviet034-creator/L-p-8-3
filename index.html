@@ -1,0 +1,1422 @@
+<!-- =========================
+     MODAL THÀNH VIÊN
+========================= -->
+<div class="modal" id="memberModal">
+  <div class="modal-box">
+    <h3 id="memberModalTitle">Thêm thành viên</h3>
+
+    <div class="form-grid">
+      <label for="memberName">Họ tên</label>
+      <input
+        id="memberName"
+        maxlength="80"
+        placeholder="Ví dụ: Nguyễn Văn A"
+      >
+
+      <label for="memberRole">Chức vụ</label>
+      <input
+        id="memberRole"
+        maxlength="80"
+        placeholder="Ví dụ: Lớp trưởng / Tổ trưởng / Thành viên"
+      >
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelMemberBtn">
+        Hủy
+      </button>
+
+      <button class="btn btn-primary" id="saveMemberBtn">
+        Lưu
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- =========================
+     MODAL SỰ KIỆN
+========================= -->
+<div class="modal" id="eventModal">
+  <div class="modal-box">
+
+    <h3 id="modalTitle">Thêm sự kiện</h3>
+
+    <div class="form-grid">
+
+      <label for="eventMonth">Tháng</label>
+      <input
+        id="eventMonth"
+        inputmode="numeric"
+        maxlength="2"
+        placeholder="Ví dụ: 09"
+      >
+
+      <label for="eventYear">Năm</label>
+      <input
+        id="eventYear"
+        inputmode="numeric"
+        maxlength="4"
+        placeholder="Ví dụ: 2026"
+      >
+
+      <label for="eventName">Tên sự kiện</label>
+      <input
+        id="eventName"
+        maxlength="120"
+        placeholder="Ví dụ: Sinh hoạt lớp"
+      >
+
+      <label for="eventDesc">Mô tả</label>
+      <textarea
+        id="eventDesc"
+        maxlength="500"
+        placeholder="Mô tả ngắn về hoạt động..."
+      ></textarea>
+
+    </div>
+
+    <div class="modal-actions">
+
+      <button
+        class="btn btn-secondary"
+        id="cancelEventBtn"
+      >
+        Hủy
+      </button>
+
+      <button
+        class="btn btn-primary"
+        id="saveEventBtn"
+      >
+        Lưu
+      </button>
+
+    </div>
+
+  </div>
+</div>
+
+
+<!-- =========================
+     PONADIRA AI
+========================= -->
+
+<button
+  class="ai-fab"
+  id="aiFab"
+  aria-label="Mở Ponadira AI"
+>
+  🐝
+</button>
+
+
+<div
+  class="ai-panel"
+  id="aiPanel"
+>
+
+  <div class="ai-head">
+
+    <div class="ai-logo">
+      🐝
+    </div>
+
+    <div>
+      <strong>Ponadira AI</strong>
+      <small>Trợ lý lớp 8/3</small>
+    </div>
+
+    <button
+      class="ai-close"
+      id="aiClose"
+      aria-label="Đóng"
+    >
+      ×
+    </button>
+
+  </div>
+
+
+  <div
+    class="ai-messages"
+    id="aiMessages"
+  ></div>
+
+
+  <div class="ai-suggests">
+
+    <button
+      class="ai-suggest"
+      type="button"
+    >
+      Lớp mình có ai?
+    </button>
+
+    <button
+      class="ai-suggest"
+      type="button"
+    >
+      Có sự kiện gì?
+    </button>
+
+    <button
+      class="ai-suggest"
+      type="button"
+    >
+      Tháng 10 có gì?
+    </button>
+
+    <button
+      class="ai-suggest"
+      type="button"
+    >
+      Giới thiệu lớp
+    </button>
+
+  </div>
+
+
+  <form
+    class="ai-form"
+    id="aiForm"
+  >
+
+    <input
+      class="ai-input"
+      id="aiInput"
+      autocomplete="off"
+      maxlength="300"
+      placeholder="Hỏi Ponadira..."
+    >
+
+    <button
+      class="ai-send"
+      type="submit"
+    >
+      Gửi
+    </button>
+
+  </form>
+
+
+  <div class="ai-note">
+    Ponadira đang dùng dữ liệu lớp được lưu trên thiết bị này.
+  </div>
+
+</div>
+
+
+<!-- =========================
+     JAVASCRIPT DUY NHẤT
+========================= -->
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+
+  /* ==================================================
+     TIỆN ÍCH
+  ================================================== */
+
+  const $ = function(selector){
+    return document.querySelector(selector);
+  };
+
+  const $$ = function(selector){
+    return Array.from(document.querySelectorAll(selector));
+  };
+
+
+  /*
+   * QUAN TRỌNG:
+   * escapeHtml cũ của bạn bị sai cú pháp.
+   * Đây là bản đúng.
+   */
+
+  function escapeHtml(value){
+
+    return String(value ?? "").replace(
+      /[&<>"']/g,
+      function(m){
+
+        return {
+          "&":"&amp;",
+          "<":"&lt;",
+          ">":"&gt;",
+          '"':"&quot;",
+          "'":"&#039;"
+        }[m];
+
+      }
+    );
+
+  }
+
+
+  function loadData(key, fallback){
+
+    try{
+
+      const data =
+        JSON.parse(
+          localStorage.getItem(key) || "null"
+        );
+
+      return data ?? fallback;
+
+    }catch(error){
+
+      console.warn(
+        "Không đọc được dữ liệu:",
+        key,
+        error
+      );
+
+      return fallback;
+
+    }
+
+  }
+
+
+  /* ==================================================
+     NĂM
+  ================================================== */
+
+  const yearElement =
+    $("#year");
+
+  if(yearElement){
+
+    yearElement.textContent =
+      new Date().getFullYear();
+
+  }
+
+
+  /* ==================================================
+     THÀNH VIÊN
+  ================================================== */
+
+  const MEMBER_KEY =
+    "lop83_members";
+
+
+  const defaultMembers = [
+
+    {
+      name:"Nguyễn Văn A",
+      role:"Lớp trưởng"
+    },
+
+    {
+      name:"Trần Thị B",
+      role:"Lớp phó học tập"
+    },
+
+    {
+      name:"Lê Văn C",
+      role:"Lớp phó phong trào"
+    },
+
+    {
+      name:"Phạm Thị D",
+      role:"Tổ trưởng"
+    },
+
+    {
+      name:"Hoàng Văn E",
+      role:"Tổ trưởng"
+    },
+
+    {
+      name:"Thành viên 8/3",
+      role:"Luôn có mặt!"
+    }
+
+  ];
+
+
+  let members =
+    loadData(
+      MEMBER_KEY,
+      defaultMembers
+    );
+
+
+  if(!Array.isArray(members)){
+
+    members =
+      defaultMembers.slice();
+
+  }
+
+
+  let editingMember =
+    -1;
+
+
+  const memberList =
+    $("#memberList");
+
+  const memberModal =
+    $("#memberModal");
+
+  const memberName =
+    $("#memberName");
+
+  const memberRole =
+    $("#memberRole");
+
+  const memberModalTitle =
+    $("#memberModalTitle");
+
+
+  function initials(name){
+
+    const parts =
+      String(name || "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+
+    if(parts.length >= 2){
+
+      return (
+        parts[0][0] +
+        parts[parts.length - 1][0]
+      ).toUpperCase();
+
+    }
+
+
+    return (
+      parts[0] || "8"
+    )
+      .slice(0,2)
+      .toUpperCase();
+
+  }
+
+
+  function saveMembers(){
+
+    localStorage.setItem(
+      MEMBER_KEY,
+      JSON.stringify(members)
+    );
+
+    updateStats();
+
+  }
+
+
+  function renderMembers(){
+
+    if(!memberList){
+      return;
+    }
+
+
+    if(!members.length){
+
+      memberList.innerHTML = `
+        <div class="empty-state">
+          Chưa có thành viên nào.
+          Bấm “Thêm thành viên” để bắt đầu.
+        </div>
+      `;
+
+      updateStats();
+
+      return;
+
+    }
+
+
+    memberList.innerHTML =
+      members.map(function(member,index){
+
+        return `
+
+          <div class="member">
+
+            <div class="avatar">
+              ${escapeHtml(
+                initials(member.name)
+              )}
+            </div>
+
+            <div>
+
+              <h3>
+                ${escapeHtml(
+                  member.name
+                )}
+              </h3>
+
+              <p>
+                ${escapeHtml(
+                  member.role || "Thành viên"
+                )}
+              </p>
+
+            </div>
+
+            <div class="member-actions">
+
+              <button
+                class="edit"
+                type="button"
+                onclick="editMember(${index})"
+              >
+                ✏️ Sửa
+              </button>
+
+              <button
+                class="delete"
+                type="button"
+                onclick="deleteMember(${index})"
+              >
+                🗑️ Xóa
+              </button>
+
+            </div>
+
+          </div>
+
+        `;
+
+      }).join("");
+
+
+    updateStats();
+
+  }
+
+
+  function openMember(index){
+
+    if(typeof index !== "number"){
+      index = -1;
+    }
+
+
+    editingMember =
+      index;
+
+
+    memberModalTitle.textContent =
+      index < 0
+        ? "Thêm thành viên"
+        : "Sửa thành viên";
+
+
+    memberName.value =
+      index < 0
+        ? ""
+        : (
+            members[index]?.name || ""
+          );
+
+
+    memberRole.value =
+      index < 0
+        ? ""
+        : (
+            members[index]?.role || ""
+          );
+
+
+    memberModal.classList.add(
+      "open"
+    );
+
+
+    setTimeout(function(){
+
+      memberName.focus();
+
+    },80);
+
+  }
+
+
+  function closeMember(){
+
+    memberModal.classList.remove(
+      "open"
+    );
+
+    editingMember =
+      -1;
+
+  }
+
+
+  $("#addMemberBtn").onclick =
+    function(){
+
+      openMember(-1);
+
+    };
+
+
+  $("#cancelMemberBtn").onclick =
+    closeMember;
+
+
+  $("#saveMemberBtn").onclick =
+    function(){
+
+      const name =
+        memberName.value.trim();
+
+      const role =
+        memberRole.value.trim()
+        || "Thành viên";
+
+
+      if(!name){
+
+        memberName.focus();
+
+        return;
+
+      }
+
+
+      if(editingMember < 0){
+
+        members.push({
+
+          name:name,
+          role:role
+
+        });
+
+      }else{
+
+        members[editingMember] = {
+
+          name:name,
+          role:role
+
+        };
+
+      }
+
+
+      saveMembers();
+
+      renderMembers();
+
+      closeMember();
+
+    };
+
+
+  window.editMember =
+    function(index){
+
+      openMember(index);
+
+    };
+
+
+  window.deleteMember =
+    function(index){
+
+      const member =
+        members[index];
+
+
+      if(!member){
+        return;
+      }
+
+
+      if(
+        confirm(
+          "Xóa " +
+          member.name +
+          "?"
+        )
+      ){
+
+        members.splice(
+          index,
+          1
+        );
+
+        saveMembers();
+
+        renderMembers();
+
+      }
+
+    };
+
+
+  memberModal.onclick =
+    function(e){
+
+      if(e.target === memberModal){
+
+        closeMember();
+
+      }
+
+    };
+
+
+  /* ==================================================
+     SỰ KIỆN
+  ================================================== */
+
+  const EVENT_KEY =
+    "lop83_events";
+
+
+  const defaultEvents = [
+
+    {
+      id:1,
+      month:"09",
+      year:"2026",
+      name:"Ngày hội bắt đầu năm học",
+      desc:
+        "Cả lớp gặp lại nhau, đặt mục tiêu mới và khởi động một năm học thật đáng nhớ."
+    },
+
+    {
+      id:2,
+      month:"10",
+      year:"2026",
+      name:"Hoạt động tập thể",
+      desc:
+        "Thi đấu, trò chơi và những màn cổ vũ của lớp."
+    },
+
+    {
+      id:3,
+      month:"11",
+      year:"2026",
+      name:"Văn nghệ & phong trào",
+      desc:
+        "Cùng nhau lên ý tưởng, tập luyện và tạo dấu ấn riêng của 8/3."
+    }
+
+  ];
+
+
+  let events =
+    loadData(
+      EVENT_KEY,
+      defaultEvents
+    );
+
+
+  if(!Array.isArray(events)){
+
+    events =
+      defaultEvents.slice();
+
+  }
+
+
+  let editingEventId =
+    null;
+
+
+  const eventList =
+    $("#eventList");
+
+  const modal =
+    $("#eventModal");
+
+
+  function saveEvents(){
+
+    localStorage.setItem(
+      EVENT_KEY,
+      JSON.stringify(events)
+    );
+
+    updateStats();
+
+  }
+
+
+  function sortEvents(){
+
+    events.sort(function(a,b){
+
+      const aa =
+        String(a.year || "") +
+        String(a.month || "")
+          .padStart(2,"0");
+
+
+      const bb =
+        String(b.year || "") +
+        String(b.month || "")
+          .padStart(2,"0");
+
+
+      return aa.localeCompare(bb);
+
+    });
+
+  }
+
+
+  function renderEvents(){
+
+    if(!eventList){
+      return;
+    }
+
+
+    sortEvents();
+
+
+    if(!events.length){
+
+      eventList.innerHTML = `
+        <div class="empty-state">
+          Chưa có sự kiện nào.
+          Hãy bấm “＋ Thêm sự kiện”.
+        </div>
+      `;
+
+      updateStats();
+
+      return;
+
+    }
+
+
+    eventList.innerHTML =
+      events.map(function(event){
+
+        return `
+
+          <div class="event">
+
+            <div class="date">
+
+              ${escapeHtml(
+                event.month
+              )}
+
+              <br>
+
+              ${escapeHtml(
+                event.year
+              )}
+
+            </div>
+
+
+            <div class="event-content">
+
+              <strong>
+                ${escapeHtml(
+                  event.name ||
+                  event.title ||
+                  "Sự kiện"
+                )}
+              </strong>
+
+
+              <span>
+                ${escapeHtml(
+                  event.desc ||
+                  "Chưa có mô tả."
+                )}
+              </span>
+
+
+              <div class="event-actions">
+
+                <button
+                  type="button"
+                  onclick="editEvent(${event.id})"
+                >
+                  ✏️ Sửa
+                </button>
+
+
+                <button
+                  class="delete"
+                  type="button"
+                  onclick="deleteEvent(${event.id})"
+                >
+                  🗑️ Xóa
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        `;
+
+      }).join("");
+
+
+    updateStats();
+
+  }
+
+
+  function openEvent(id){
+
+    editingEventId =
+      id === null
+        ? null
+        : Number(id);
+
+
+    const event =
+      editingEventId === null
+        ? null
+        : events.find(function(e){
+
+            return Number(e.id) ===
+              editingEventId;
+
+          });
+
+
+    $("#modalTitle").textContent =
+      event
+        ? "Sửa sự kiện"
+        : "Thêm sự kiện";
+
+
+    $("#eventMonth").value =
+      event?.month || "";
+
+
+    $("#eventYear").value =
+      event?.year ||
+      new Date().getFullYear();
+
+
+    $("#eventName").value =
+      event?.name ||
+      event?.title ||
+      "";
+
+
+    $("#eventDesc").value =
+      event?.desc ||
+      "";
+
+
+    modal.classList.add(
+      "open"
+    );
+
+  }
+
+
+  function closeEvent(){
+
+    modal.classList.remove(
+      "open"
+    );
+
+    editingEventId =
+      null;
+
+  }
+
+
+  $("#addEventBtn").onclick =
+    function(){
+
+      openEvent(null);
+
+    };
+
+
+  $("#cancelEventBtn").onclick =
+    closeEvent;
+
+
+  modal.onclick =
+    function(e){
+
+      if(e.target === modal){
+
+        closeEvent();
+
+      }
+
+    };
+
+
+  $("#saveEventBtn").onclick =
+    function(){
+
+      const monthInput =
+        $("#eventMonth")
+          .value
+          .trim();
+
+      const year =
+        $("#eventYear")
+          .value
+          .trim();
+
+      const name =
+        $("#eventName")
+          .value
+          .trim();
+
+      const desc =
+        $("#eventDesc")
+          .value
+          .trim();
+
+
+      const monthNumber =
+        Number(monthInput);
+
+
+      if(
+        !monthInput ||
+        !year ||
+        !name ||
+        !Number.isInteger(monthNumber) ||
+        monthNumber < 1 ||
+        monthNumber > 12
+      ){
+
+        alert(
+          "Hãy nhập tháng từ 1–12, năm và tên sự kiện nhé."
+        );
+
+        return;
+
+      }
+
+
+      const month =
+        String(monthNumber)
+          .padStart(2,"0");
+
+
+      if(editingEventId !== null){
+
+        const event =
+          events.find(function(e){
+
+            return Number(e.id) ===
+              editingEventId;
+
+          });
+
+
+        if(event){
+
+          event.month =
+            month;
+
+          event.year =
+            year;
+
+          event.name =
+            name;
+
+          event.desc =
+            desc;
+
+        }
+
+      }else{
+
+        events.push({
+
+          id:Date.now(),
+
+          month:month,
+
+          year:year,
+
+          name:name,
+
+          desc:desc
+
+        });
+
+      }
+
+
+      saveEvents();
+
+      renderEvents();
+
+      closeEvent();
+
+    };
+
+
+  window.editEvent =
+    function(id){
+
+      openEvent(id);
+
+    };
+
+
+  window.deleteEvent =
+    function(id){
+
+      const event =
+        events.find(function(e){
+
+          return Number(e.id) ===
+            Number(id);
+
+        });
+
+
+      if(!event){
+        return;
+      }
+
+
+      if(
+        confirm(
+          "Xóa sự kiện này?"
+        )
+      ){
+
+        events =
+          events.filter(function(e){
+
+            return Number(e.id) !==
+              Number(id);
+
+          });
+
+
+        saveEvents();
+
+        renderEvents();
+
+      }
+
+    };
+
+
+  /* ==================================================
+     THƯ VIỆN ẢNH
+  ================================================== */
+
+  const DB_NAME =
+    "lop83_photos";
+
+  const STORE_NAME =
+    "photos";
+
+
+  const picker =
+    $("#photoPicker");
+
+  const gallery =
+    $("#photoGallery");
+
+
+  const photoTitles = [
+
+    [
+      "📸",
+      "Khoảnh khắc tập thể",
+      "Ảnh lớp / ảnh dã ngoại"
+    ],
+
+    [
+      "🏆",
+      "Thành tích",
+      "Thi đấu & cuộc thi"
+    ],
+
+    [
+      "🎤",
+      "Văn nghệ",
+      "Biểu diễn của lớp"
+    ],
+
+    [
+      "⚽",
+      "Thể thao",
+      "Những trận đấu đáng nhớ"
+    ],
+
+    [
+      "😂",
+      "Meme lớp",
+      "Góc vui vẻ 8/3"
+    ]
+
+  ];
+
+
+  let dbPromise =
+    null;
+
+
+  function dbOpen(){
+
+    if(dbPromise){
+
+      return dbPromise;
+
+    }
+
+
+    dbPromise =
+      new Promise(
+        function(resolve,reject){
+
+          const request =
+            indexedDB.open(
+              DB_NAME,
+              1
+            );
+
+
+          request.onupgradeneeded =
+            function(){
+
+              const db =
+                request.result;
+
+
+              if(
+                !db.objectStoreNames
+                  .contains(STORE_NAME)
+              ){
+
+                db.createObjectStore(
+                  STORE_NAME,
+                  {
+                    keyPath:"id",
+                    autoIncrement:true
+                  }
+                );
+
+              }
+
+            };
+
+
+          request.onsuccess =
+            function(){
+
+              resolve(
+                request.result
+              );
+
+            };
+
+
+          request.onerror =
+            function(){
+
+              dbPromise =
+                null;
+
+              reject(
+                request.error
+              );
+
+            };
+
+        }
+      );
+
+
+    return dbPromise;
+
+  }
+
+
+  async function getPhotos(){
+
+    const db =
+      await dbOpen();
+
+
+    return new Promise(
+      function(resolve,reject){
+
+        const request =
+          db
+            .transaction(
+              STORE_NAME,
+              "readonly"
+            )
+            .objectStore(
+              STORE_NAME
+            )
+            .getAll();
+
+
+        request.onsuccess =
+          function(){
+
+            resolve(
+              request.result || []
+            );
+
+          };
+
+
+        request.onerror =
+          function(){
+
+            reject(
+              request.error
+            );
+
+          };
+
+      }
+    );
+
+  }
+
+
+  async function addPhotos(files){
+
+    const db =
+      await dbOpen();
+
+
+    for(
+      const file of files
+    ){
+
+      if(
+        !file.type.startsWith(
+          "image/"
+        )
+      ){
+
+        continue;
+
+      }
+
+
+      await new Promise(
+        function(resolve,reject){
+
+          const reader =
+            new FileReader();
+
+
+          reader.onload =
+            function(){
+
+              const tx =
+                db.transaction(
+                  STORE_NAME,
+                  "readwrite"
+                );
+
+
+              tx.objectStore(
+                STORE_NAME
+              ).add({
+
+                name:file.name,
+
+                data:reader.result,
+
+                createdAt:
+                  Date.now()
+
+              });
+
+
+              tx.oncomplete =
+                resolve;
+
+
+              tx.onerror =
+                function(){
+
+                  reject(
+                    tx.error
+                  );
+
+                };
+
+            };
+
+
+          reader.onerror =
+            function(){
+
+              reject(
+                reader.error
+              );
+
+            };
+
+
+          reader.readAsDataURL(
+            file
+          );
+
+        }
+      );
+
+    }
+
+
+    renderPhotos();
+
+  }
+
+
+  async function deletePhoto(id){
+
+    try{
+
+      const db =
+        await dbOpen();
+
+
+      await new Promise(
+        function(resolve,reject){
+
+          const tx =
+            db.transaction(
+              STORE_NAME,
+              "readwrite"
+            );
+
+
+          tx.objectStore(
+            STORE_NAME
+          ).delete(id);
+
+
+          tx.oncomplete =
+            resolve;
+
+
+          tx.onerror =
+            function(){
+
+              reject(
+                tx.er
